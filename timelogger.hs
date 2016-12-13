@@ -1,6 +1,7 @@
 module Main where
 
 import Data.Maybe
+import Data.Time
 
 version :: String
 version = "0.0.1"
@@ -11,39 +12,44 @@ data TimeLog = TimeLog { records :: Records
 
 type Records = [Record]
 data Record = Record { recordNum :: String
-                     , inTime :: Time
-                     , outTime :: Maybe Time
+                     , inTime :: UTCTime
+                     , outTime :: Maybe UTCTime
                      , description :: Maybe String
                      , billable :: Maybe Bool
                      } deriving (Show, Eq)
-
-type Time = Rational
-type Date = Rational
 
 main :: IO ()
 main = do
   putStrLn $ "Timelogger v" ++ version
   putStrLn "Press \"h\" for help\n"
-  mainLoop $ Just $ TimeLog [] Nothing
+  currentTime <- getCurrentTime
+  let currentDay = utctDay currentTime
+  mainLoop currentDay (Just $ TimeLog [] Nothing)
 
-mainLoop :: Maybe TimeLog -> IO ()
-mainLoop (Just timeLog) = do
-  putStr "> "
+mainLoop :: Day -> Maybe TimeLog -> IO ()
+mainLoop day (Just timeLog) = do
+  printPrompt timeLog day
   command <- getLine
-  newLog <- handleCommand timeLog $ head command
-  return newLog >>= mainLoop
-mainLoop Nothing = return ()
+  newLog <- handleCommand day timeLog $ head command
+  return newLog >>= (mainLoop day)
+mainLoop _ Nothing = return ()
 
-handleCommand :: TimeLog -> Char -> IO (Maybe TimeLog)
-handleCommand _ 'q' = return Nothing
-handleCommand timeLog 'c' = handleClockInOut timeLog 123
-handleCommand timeLog 'l' = printLog timeLog
-handleCommand timeLog cmd = do
+printPrompt :: TimeLog -> Day -> IO ()
+printPrompt timeLog day = do
+  putStrLn $ "Current date: " ++ (show day)
+  putStr "> "
+
+handleCommand :: Day -> TimeLog -> Char -> IO (Maybe TimeLog)
+handleCommand _ _ 'q' = return Nothing
+handleCommand day timeLog 'c' = do
+  handleClockInOut timeLog day
+handleCommand day timeLog 'l' = printLog timeLog
+handleCommand _ timeLog cmd = do
   putStrLn $ "Invalid command: " ++ [cmd]
   return $ Just timeLog
 
-handleClockInOut :: TimeLog -> Date -> IO (Maybe TimeLog)
-handleClockInOut timeLog date = do
+handleClockInOut :: TimeLog -> Day -> IO (Maybe TimeLog)
+handleClockInOut timeLog day = do
   newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
   return $ Just newLog
 
@@ -53,14 +59,16 @@ clockedIn timeLog = isJust (current timeLog)
 clockIn :: TimeLog -> IO TimeLog
 clockIn timeLog = do
   num <- promptRecordNum
-  return $ TimeLog (records timeLog) (Just $ Record num 123 Nothing Nothing Nothing)
+  currentTime <- getCurrentTime
+  return $ TimeLog (records timeLog) (Just $ Record num currentTime Nothing Nothing Nothing)
 
 clockOut :: TimeLog -> IO TimeLog
 clockOut timeLog = do
   desc <- promptDescription
   bill <- promptBillable
+  currentTime <- getCurrentTime
   let curr = fromJust $ current timeLog
-      newRecord = Record (recordNum curr) (inTime curr) (Just 124) (Just desc) (Just bill)
+      newRecord = Record (recordNum curr) (inTime curr) (Just currentTime) (Just desc) (Just bill)
   return $ TimeLog (newRecord : records timeLog) Nothing
 
 promptRecordNum :: IO String
