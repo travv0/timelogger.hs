@@ -1,6 +1,5 @@
 module Main where
 
-import Control.Monad.State.Lazy
 import Data.Maybe
 
 version :: String
@@ -18,55 +17,75 @@ data Record = Record { recordNum :: String
                      , billable :: Maybe Bool
                      } deriving (Show, Eq)
 
-type Time = Integer
-type Date = Integer
-
-commands :: [(String, TimeLog -> Date -> IO (Maybe (State TimeLog TimeLog), Date))]
-commands = [ ("c", handleClockInOut)
-           -- , ("l", dummyFunc) --printLog)
-           -- , ("d", dummyFunc) --changeDate)
-           , ("q", quit)
-           ]
+type Time = Rational
+type Date = Rational
 
 main :: IO ()
 main = do
   putStrLn $ "Timelogger v" ++ version
   putStrLn "Press \"h\" for help\n"
-  mainLoop $ TimeLog [] Nothing
+  mainLoop $ Just $ TimeLog [] Nothing
 
-mainLoop :: TimeLog -> IO ()
-mainLoop timeLog = do
+mainLoop :: Maybe TimeLog -> IO ()
+mainLoop (Just timeLog) = do
   putStr "> "
   command <- getLine
-  let (Just action) = lookup command commands
-  newLog <- action timeLog
-  when (isJust newLog)
-    $ mainLoop timeLog
+  newLog <- handleCommand timeLog $ head command
+  return newLog >>= mainLoop
+mainLoop Nothing = return ()
 
-handleClockInOut :: TimeLog -> Date -> IO (Maybe (State TimeLog TimeLog), Date)
-handleClockInOut timeLog = do
-  let action = if (clockedIn timeLog) then clockIn else clockOut
-  let newLog = TimeLog (records timeLog) (Just action)
-  return $ Just (runState)
-  -- if (isJust $ current timeLog)
+handleCommand :: TimeLog -> Char -> IO (Maybe TimeLog)
+handleCommand _ 'q' = return Nothing
+handleCommand timeLog 'c' = handleClockInOut timeLog 123
+handleCommand timeLog 'l' = printLog timeLog
+handleCommand timeLog cmd = do
+  putStrLn $ "Invalid command: " ++ [cmd]
+  return $ Just timeLog
+
+handleClockInOut :: TimeLog -> Date -> IO (Maybe TimeLog)
+handleClockInOut timeLog date = do
+  newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
+  return $ Just newLog
 
 clockedIn :: TimeLog -> Bool
 clockedIn timeLog = isJust (current timeLog)
 
-clockIn :: IO Record
-clockIn = do
-  recordNum <- promptRecordNum
-  return $ Record recordNum 123 Nothing Nothing Nothing
+clockIn :: TimeLog -> IO TimeLog
+clockIn timeLog = do
+  num <- promptRecordNum
+  return $ TimeLog (records timeLog) (Just $ Record num 123 Nothing Nothing Nothing)
 
-clockOut :: IO Record
-clockOut = do
-  recordNum <- promptRecordNum
-  return $ Record recordNum 123 Nothing Nothing Nothing
+clockOut :: TimeLog -> IO TimeLog
+clockOut timeLog = do
+  desc <- promptDescription
+  bill <- promptBillable
+  let curr = fromJust $ current timeLog
+      newRecord = Record (recordNum curr) (inTime curr) (Just 124) (Just desc) (Just bill)
+  return $ TimeLog (newRecord : records timeLog) Nothing
 
 promptRecordNum :: IO String
 promptRecordNum = do
   putStr "Enter item ID: "
   getLine
 
-quit :: TimeLog -> Date -> IO (Maybe (State TimeLog TimeLog), Date)
-quit _ _ = return Nothing
+promptDescription :: IO String
+promptDescription = do
+  putStr "Enter a description of what you worked on: "
+  getLine
+
+promptBillable :: IO Bool
+promptBillable = do
+  putStr "Was this work billable? (y or n) "
+  getLine >>= readYorN
+
+readYorN :: String -> IO Bool
+readYorN "y" = return True
+readYorN "n" = return False
+readYorN _ = do
+  putStrLn "Please type \"y\" for yes or \"n\" for no."
+  getLine >>= readYorN
+
+printLog :: TimeLog -> IO (Maybe TimeLog)
+printLog timeLog = do
+  putStrLn $ show timeLog
+  return $ Just timeLog
