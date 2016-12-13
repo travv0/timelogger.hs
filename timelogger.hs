@@ -52,16 +52,19 @@ handleCommand :: Day -> TimeLog -> String -> IO (Maybe TimeLog)
 handleCommand _ timeLog [] = return $ Just timeLog
 handleCommand _ _ ('q':_) = return Nothing
 handleCommand day timeLog ('c':_) = do
-  handleClockInOut timeLog day
-handleCommand day timeLog ('l':_) = printLog timeLog
+  newLog <- handleClockInOut timeLog day
+  return $ Just newLog
+handleCommand day timeLog ('l':_) = do
+  printLog timeLog
+  return $ Just timeLog
 handleCommand _ timeLog cmd = do
   putStrLn $ "Invalid command: " ++ cmd
   return $ Just timeLog
 
-handleClockInOut :: TimeLog -> Day -> IO (Maybe TimeLog)
+handleClockInOut :: TimeLog -> Day -> IO TimeLog
 handleClockInOut timeLog day = do
   newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
-  return $ Just newLog
+  return newLog
 
 clockedIn :: TimeLog -> Bool
 clockedIn timeLog = isJust (current timeLog)
@@ -69,23 +72,36 @@ clockedIn timeLog = isJust (current timeLog)
 clockIn :: TimeLog -> IO TimeLog
 clockIn timeLog = do
   num <- prompt "Enter item ID: "
-  currentTime <- getCurrentTime
-  return $ TimeLog (records timeLog) (Just $ Record num currentTime Nothing Nothing Nothing)
+  if (null num)
+    then do
+      putStrLn "Canceled"
+      return timeLog
+    else do
+      currentTime <- getCurrentTime
+      return $ TimeLog (records timeLog) (Just $ Record (fromJust num) currentTime Nothing Nothing Nothing)
 
 clockOut :: TimeLog -> IO TimeLog
 clockOut timeLog = do
   desc <- prompt "Enter a description of what you worked on: "
-  bill <- promptYN "Was this work billable?"
-  currentTime <- getCurrentTime
-  let curr = fromJust $ current timeLog
-      newRecord = Record (recordNum curr) (inTime curr) (Just currentTime) (Just desc) (Just bill)
-  return $ TimeLog (newRecord : records timeLog) Nothing
+  if (null desc)
+    then do
+      putStrLn "Canceled"
+      return timeLog
+    else do
+      bill <- promptYN "Was this work billable?"
+      currentTime <- getCurrentTime
+      let curr = fromJust $ current timeLog
+          newRecord = Record (recordNum curr) (inTime curr) (Just currentTime) desc (Just bill)
+      return $ TimeLog (newRecord : records timeLog) Nothing
 
-prompt :: String -> IO String
+prompt :: String -> IO (Maybe String)
 prompt s = do
   putStr s
   hFlush stdout
-  getLine
+  response <- getLine
+  if (null response)
+    then return Nothing
+    else return $ Just response
 
 promptYN :: String -> IO Bool
 promptYN s = do
@@ -100,7 +116,6 @@ readYorN _ = do
   putStr "Please type \"y\" for yes or \"n\" for no. "
   getLine >>= readYorN
 
-printLog :: TimeLog -> IO (Maybe TimeLog)
+printLog :: TimeLog -> IO ()
 printLog timeLog = do
   putStrLn $ show timeLog
-  return $ Just timeLog
