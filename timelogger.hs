@@ -36,8 +36,15 @@ mainLoop _ Nothing = return ()
 
 printPrompt :: TimeLog -> Day -> IO ()
 printPrompt timeLog day = do
-  putStrLn $ "Current date: " ++ (show day)
-  putStr "> "
+  let curr = current timeLog
+  putStrLn $ "Current date: " ++ (formatTime defaultTimeLocale "%D" day) ++ printCurrInfo curr
+  currentTime <- getCurrentTime
+  putStr $ (formatTime defaultTimeLocale "%R" currentTime) ++ "> "
+
+printCurrInfo :: Maybe Record -> String
+printCurrInfo (Just curr) =
+  " (Current: " ++ (recordNum curr) ++ ")"
+printCurrInfo Nothing = ""
 
 handleCommand :: Day -> TimeLog -> Char -> IO (Maybe TimeLog)
 handleCommand _ _ 'q' = return Nothing
