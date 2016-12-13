@@ -2,6 +2,7 @@ module Main where
 
 import Data.Maybe
 import Data.Time
+import System.IO
 
 version :: String
 version = "0.0.1"
@@ -40,6 +41,7 @@ printPrompt timeLog day = do
   putStrLn $ "Current date: " ++ (formatTime defaultTimeLocale "%D" day) ++ printCurrInfo curr
   currentTime <- getCurrentTime
   putStr $ (formatTime defaultTimeLocale "%R" currentTime) ++ "> "
+  hFlush stdout
 
 printCurrInfo :: Maybe Record -> String
 printCurrInfo (Just curr) =
@@ -82,11 +84,13 @@ clockOut timeLog = do
 prompt :: String -> IO String
 prompt s = do
   putStr s
+  hFlush stdout
   getLine
 
 promptYN :: String -> IO Bool
 promptYN s = do
   putStr $ s ++ " (y or n) "
+  hFlush stdout
   getLine >>= readYorN
 
 readYorN :: String -> IO Bool
