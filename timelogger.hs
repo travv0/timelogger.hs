@@ -30,7 +30,7 @@ mainLoop :: Day -> Maybe TimeLog -> IO ()
 mainLoop day (Just timeLog) = do
   printPrompt timeLog day
   command <- getLine
-  newLog <- handleCommand day timeLog $ head command
+  newLog <- handleCommand day timeLog command
   return newLog >>= (mainLoop day)
 mainLoop _ Nothing = return ()
 
@@ -46,13 +46,14 @@ printCurrInfo (Just curr) =
   " (Current: " ++ (recordNum curr) ++ ")"
 printCurrInfo Nothing = ""
 
-handleCommand :: Day -> TimeLog -> Char -> IO (Maybe TimeLog)
-handleCommand _ _ 'q' = return Nothing
-handleCommand day timeLog 'c' = do
+handleCommand :: Day -> TimeLog -> String -> IO (Maybe TimeLog)
+handleCommand _ timeLog [] = return $ Just timeLog
+handleCommand _ _ ('q':_) = return Nothing
+handleCommand day timeLog ('c':_) = do
   handleClockInOut timeLog day
-handleCommand day timeLog 'l' = printLog timeLog
+handleCommand day timeLog ('l':_) = printLog timeLog
 handleCommand _ timeLog cmd = do
-  putStrLn $ "Invalid command: " ++ [cmd]
+  putStrLn $ "Invalid command: " ++ cmd
   return $ Just timeLog
 
 handleClockInOut :: TimeLog -> Day -> IO (Maybe TimeLog)
