@@ -31,8 +31,13 @@ mainLoop :: Day -> Maybe TimeLog -> IO ()
 mainLoop day (Just timeLog) = do
   printPrompt timeLog day
   command <- getLine
-  newLog <- handleCommand day timeLog command
-  return newLog >>= (mainLoop day)
+  result <- handleCommand day timeLog command
+  if (null result)
+    then return ()
+    else do
+      let newDay = snd $ fromJust result
+          newLog = fst $ fromJust result
+      mainLoop newDay (Just newLog)
 mainLoop _ Nothing = return ()
 
 printPrompt :: TimeLog -> Day -> IO ()
@@ -48,23 +53,34 @@ printCurrInfo (Just curr) =
   " (Current: " ++ (recordNum curr) ++ ")"
 printCurrInfo Nothing = ""
 
-handleCommand :: Day -> TimeLog -> String -> IO (Maybe TimeLog)
-handleCommand _ timeLog [] = return $ Just timeLog
+handleCommand :: Day -> TimeLog -> String -> IO (Maybe (TimeLog,Day))
+handleCommand day timeLog [] = return $ Just (timeLog,day)
 handleCommand _ _ ('q':_) = return Nothing
 handleCommand day timeLog ('c':_) = do
   newLog <- handleClockInOut timeLog day
-  return $ Just newLog
+  return $ Just (newLog,day)
+handleCommand _ timeLog ('d':_) = do
+  newDay <- prompt "Enter new date: "
+  parsedDay <- parseTimeM True defaultTimeLocale "%D" (fromJust newDay)
+  return $ Just (timeLog,parsedDay)
 handleCommand day timeLog ('l':_) = do
   printLog timeLog
-  return $ Just timeLog
-handleCommand _ timeLog cmd = do
+  return $ Just (timeLog,day)
+handleCommand day timeLog cmd = do
   putStrLn $ "Invalid command: " ++ cmd
-  return $ Just timeLog
+  return $ Just (timeLog,day)
 
 handleClockInOut :: TimeLog -> Day -> IO TimeLog
 handleClockInOut timeLog day = do
-  newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
-  return newLog
+  currentTime <- getCurrentTime
+  let currentDay = utctDay currentTime
+  if (day == currentDay)
+    then do
+      newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
+      return newLog
+    else do
+      putStrLn "You must be on today's date to clock in or out."
+      return timeLog
 
 clockedIn :: TimeLog -> Bool
 clockedIn timeLog = isJust (current timeLog)
