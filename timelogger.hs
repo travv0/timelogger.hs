@@ -135,3 +135,13 @@ readYorN _ = do
 printLog :: TimeLog -> IO ()
 printLog timeLog = do
   putStrLn $ show timeLog
+
+getMinutes :: Record -> IO Int
+getMinutes record
+  | null (outTime record) = do
+      currentTime <- getCurrentTime
+      let secondsWorked = ((realToFrac $ diffUTCTime currentTime (inTime record)) :: Float)
+      return $ round (secondsWorked / 60)
+  | otherwise = let secondsWorked = ((realToFrac $ diffUTCTime (fromJust (outTime record))
+                                                               (inTime record)) :: Float)
+                    in return $ round (secondsWorked / 60)
