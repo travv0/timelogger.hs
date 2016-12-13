@@ -65,39 +65,34 @@ clockedIn timeLog = isJust (current timeLog)
 
 clockIn :: TimeLog -> IO TimeLog
 clockIn timeLog = do
-  num <- promptRecordNum
+  num <- prompt "Enter item ID: "
   currentTime <- getCurrentTime
   return $ TimeLog (records timeLog) (Just $ Record num currentTime Nothing Nothing Nothing)
 
 clockOut :: TimeLog -> IO TimeLog
 clockOut timeLog = do
-  desc <- promptDescription
-  bill <- promptBillable
+  desc <- prompt "Enter a description of what you worked on: "
+  bill <- promptYN "Was this work billable?"
   currentTime <- getCurrentTime
   let curr = fromJust $ current timeLog
       newRecord = Record (recordNum curr) (inTime curr) (Just currentTime) (Just desc) (Just bill)
   return $ TimeLog (newRecord : records timeLog) Nothing
 
-promptRecordNum :: IO String
-promptRecordNum = do
-  putStr "Enter item ID: "
+prompt :: String -> IO String
+prompt s = do
+  putStr s
   getLine
 
-promptDescription :: IO String
-promptDescription = do
-  putStr "Enter a description of what you worked on: "
-  getLine
-
-promptBillable :: IO Bool
-promptBillable = do
-  putStr "Was this work billable? (y or n) "
+promptYN :: String -> IO Bool
+promptYN s = do
+  putStr $ s ++ " (y or n) "
   getLine >>= readYorN
 
 readYorN :: String -> IO Bool
 readYorN "y" = return True
 readYorN "n" = return False
 readYorN _ = do
-  putStrLn "Please type \"y\" for yes or \"n\" for no."
+  putStr "Please type \"y\" for yes or \"n\" for no. "
   getLine >>= readYorN
 
 printLog :: TimeLog -> IO (Maybe TimeLog)
