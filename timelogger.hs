@@ -11,7 +11,7 @@ version = "0.0.1"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
-                       } deriving (Show, Eq)
+                       } deriving (Read, Show, Eq)
 
 type Records = [Record]
 data Record = Record { recordNum :: String
@@ -19,7 +19,7 @@ data Record = Record { recordNum :: String
                      , outTime :: Maybe UTCTime
                      , description :: Maybe String
                      , billable :: Maybe Bool
-                     } deriving (Show, Eq)
+                     } deriving (Read, Show, Eq)
 
 main :: IO ()
 main = do
@@ -27,7 +27,8 @@ main = do
   putStrLn "Press \"h\" for help\n"
   currentTime <- getCurrentTime
   let currentDay = utctDay currentTime
-  mainLoop currentDay (Just $ TimeLog [] Nothing)
+  timeLog <- loadTimeLog currentDay
+  mainLoop currentDay $ Just timeLog
 
 mainLoop :: Day -> Maybe TimeLog -> IO ()
 mainLoop day (Just timeLog) = do
@@ -84,6 +85,7 @@ handleClockInOut timeLog day = do
   if (day == currentDay)
     then do
       newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
+      saveTimeLog day newLog
       return newLog
     else do
       putStrLn "You must be on today's date to clock in or out."
@@ -164,6 +166,18 @@ printRecord rcd = do
   putStrLn $ show mins ++ " Minutes, " ++  if fromJust (billable rcd)
                                            then "Billable"
                                            else "Non-billable"
+
+formatFileName :: Day -> String
+formatFileName day = (formatTime defaultTimeLocale "%_Y%m%d" day)
+
+saveTimeLog :: Day -> TimeLog -> IO ()
+saveTimeLog day timeLog =
+  writeFile (formatFileName day) $ show timeLog
+
+loadTimeLog :: Day -> IO TimeLog
+loadTimeLog day = do
+  timeLog <- readFile (formatFileName day)
+  return $ (read timeLog :: TimeLog)
 
 getMinutes :: Record -> IO Int
 getMinutes record
