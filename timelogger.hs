@@ -40,8 +40,7 @@ main = do
 mainLoop :: Day -> Maybe TimeLog -> IO ()
 mainLoop day (Just timeLog) = do
   printPrompt timeLog day
-  command <- getLine
-  result <- handleCommand day timeLog command
+  result <- getLine >>= handleCommand day timeLog
   if (null result)
     then return ()
     else do
