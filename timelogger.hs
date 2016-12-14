@@ -4,6 +4,7 @@ import Data.Maybe
 import Data.Time
 import Data.List
 import System.IO
+import System.Directory
 import Control.Monad
 
 version :: String
@@ -67,10 +68,11 @@ handleCommand _ _ ('q':_) = return Nothing
 handleCommand day timeLog ('c':_) = do
   newLog <- handleClockInOut timeLog day
   return $ Just (newLog,day)
-handleCommand _ timeLog ('d':_) = do
+handleCommand _ _ ('d':_) = do
   newDay <- prompt "Enter new date: "
   parsedDay <- parseTimeM True defaultTimeLocale "%D" (fromJust newDay)
-  return $ Just (timeLog,parsedDay)
+  newLog <- loadTimeLog parsedDay
+  return $ Just (newLog,parsedDay)
 handleCommand day timeLog ('l':_) = do
   printLog day timeLog
   return $ Just (timeLog,day)
@@ -176,8 +178,15 @@ saveTimeLog day timeLog =
 
 loadTimeLog :: Day -> IO TimeLog
 loadTimeLog day = do
-  timeLog <- readFile (formatFileName day)
-  return $ (read timeLog :: TimeLog)
+  let fileName = formatFileName day
+  fileExists <- doesFileExist fileName
+  if fileExists
+    then do
+      timeLog <- readFile (formatFileName day)
+      return $ (read timeLog :: TimeLog)
+    else
+      return $ TimeLog [] Nothing
+
 
 getMinutes :: Record -> IO Int
 getMinutes record
