@@ -2,6 +2,7 @@ module Main where
 
 import Data.Maybe
 import Data.Time
+import Data.List
 import System.IO
 import Control.Monad
 
@@ -45,7 +46,7 @@ printPrompt :: TimeLog -> Day -> IO ()
 printPrompt timeLog day = do
   let curr = current timeLog
   totalMins <- getTotalMinutes timeLog
-  putStr $ "Current date: " ++ (formatTime defaultTimeLocale "%D" day) ++
+  putStr $ "\nCurrent date: " ++ (formatTime defaultTimeLocale "%D" day) ++
     " - Total minutes: " ++ (show totalMins)
   printCurrInfo curr
   putStr "\n"
@@ -70,7 +71,7 @@ handleCommand _ timeLog ('d':_) = do
   parsedDay <- parseTimeM True defaultTimeLocale "%D" (fromJust newDay)
   return $ Just (timeLog,parsedDay)
 handleCommand day timeLog ('l':_) = do
-  printLog timeLog
+  printLog day timeLog
   return $ Just (timeLog,day)
 handleCommand day timeLog cmd = do
   putStrLn $ "Invalid command: " ++ cmd
@@ -138,9 +139,31 @@ readYorN _ = do
   putStr "Please type \"y\" for yes or \"n\" for no. "
   getLine >>= readYorN
 
-printLog :: TimeLog -> IO ()
-printLog timeLog = do
-  putStrLn $ show timeLog
+printLog :: Day -> TimeLog -> IO ()
+printLog day timeLog = do
+  putStrLn $ "\nTime log for " ++ show day
+  let recs = records timeLog
+  let ids = getRecordNums recs
+  _ <- mapM (printRecordsForNum recs) ids
+  putStrLn "\n-------------------------------------"
+
+getRecordNums :: Records -> [String]
+getRecordNums recs = nub $ map (\rcd -> recordNum rcd) recs
+
+printRecordsForNum :: Records -> String -> IO ()
+printRecordsForNum recs num = do
+  putStrLn "\n-------------------------------------\n"
+  putStrLn $ num ++ ":\n"
+  _ <- mapM printRecord (filter (\rcd -> ((recordNum rcd) == num)) recs)
+  return ()
+
+printRecord :: Record -> IO ()
+printRecord rcd = do
+  mins <- getMinutes rcd
+  putStrLn $ "Description: " ++ fromJust (description rcd)
+  putStrLn $ show mins ++ " Minutes, " ++  if fromJust (billable rcd)
+                                           then "Billable"
+                                           else "Non-billable"
 
 getMinutes :: Record -> IO Int
 getMinutes record
