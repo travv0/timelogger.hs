@@ -177,14 +177,14 @@ getRecordNums recs = nub $ map (\rcd -> recordNum rcd) recs
 printRecordsForNum :: Records -> String -> IO ()
 printRecordsForNum recs num = do
   putStrLn "\n-------------------------------------\n"
-  putStrLn $ num ++ ":\n"
+  putStrLn $ num ++ ":"
   _ <- mapM printRecord (filter (\rcd -> ((recordNum rcd) == num)) recs)
   return ()
 
 printRecord :: Record -> IO ()
 printRecord rcd = do
   mins <- getMinutes rcd
-  putStrLn $ "Description: " ++ fromJust (description rcd)
+  putStrLn $ "\nDescription: " ++ fromJust (description rcd)
   putStrLn $ show mins ++ " Minutes, " ++  if fromJust (billable rcd)
                                            then "Billable"
                                            else "Non-billable"
