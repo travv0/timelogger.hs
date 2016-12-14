@@ -16,8 +16,8 @@ data TimeLog = TimeLog { records :: Records
 
 type Records = [Record]
 data Record = Record { recordNum :: String
-                     , inTime :: UTCTime
-                     , outTime :: Maybe UTCTime
+                     , inTime :: LocalTime
+                     , outTime :: Maybe LocalTime
                      , description :: Maybe String
                      , billable :: Maybe Bool
                      } deriving (Read, Show, Eq)
@@ -33,8 +33,7 @@ main :: IO ()
 main = do
   putStrLn $ "Timelogger v" ++ version
   putStrLn "Press \"h\" for help"
-  currentTime <- getCurrentTime
-  let currentDay = utctDay currentTime
+  currentDay <- getToday
   timeLog <- loadTimeLog currentDay
   mainLoop currentDay $ Just timeLog
 
@@ -59,7 +58,7 @@ printPrompt timeLog day = do
     " - Total minutes: " ++ (show totalMins)
   printCurrInfo curr
   putStr "\n"
-  currentTime <- getCurrentTime
+  currentTime <- getLocalTime
   putStr $ (formatTime defaultTimeLocale "%R" currentTime) ++ "> "
   hFlush stdout
 
@@ -102,8 +101,7 @@ initPrintLog day timeLog = do
 
 handleClockInOut :: TimeLog -> Day -> IO TimeLog
 handleClockInOut timeLog day = do
-  currentTime <- getCurrentTime
-  let currentDay = utctDay currentTime
+  currentDay <- getToday
   if (day == currentDay)
     then do
       newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
@@ -116,6 +114,16 @@ handleClockInOut timeLog day = do
 clockedIn :: TimeLog -> Bool
 clockedIn timeLog = isJust (current timeLog)
 
+getToday :: IO Day
+getToday = do
+  currentTime <- getLocalTime
+  return $ localDay currentTime
+
+getLocalTime :: IO LocalTime
+getLocalTime = do
+  zonedTime <- getZonedTime
+  return $ zonedTimeToLocalTime zonedTime
+
 clockIn :: TimeLog -> IO TimeLog
 clockIn timeLog = do
   num <- prompt "Enter item ID: "
@@ -124,7 +132,8 @@ clockIn timeLog = do
       putStrLn "Canceled"
       return timeLog
     else do
-      currentTime <- getCurrentTime
+      currentTime <- getLocalTime
+      putStrLn $ "Clocked in at " ++ formatTime defaultTimeLocale "%R" currentTime
       return $ TimeLog (records timeLog) (Just $ Record (fromJust num) currentTime Nothing Nothing Nothing)
 
 clockOut :: TimeLog -> IO TimeLog
@@ -136,9 +145,10 @@ clockOut timeLog = do
       return timeLog
     else do
       bill <- promptYN "Was this work billable?"
-      currentTime <- getCurrentTime
+      currentTime <- getLocalTime
       let curr = fromJust $ current timeLog
           newRecord = Record (recordNum curr) (inTime curr) (Just currentTime) desc (Just bill)
+      putStrLn $ "Clocked out at " ++ formatTime defaultTimeLocale "%R" currentTime
       return $ TimeLog (newRecord : records timeLog) Nothing
 
 prompt :: String -> IO (Maybe String)
@@ -211,8 +221,12 @@ getMinutes :: Record -> IO Int
 getMinutes record
   | null (outTime record) = do
       currentTime <- getCurrentTime
-      return $ getMinuteDifference currentTime (inTime record)
-  | otherwise = return $ getMinuteDifference (fromJust $ outTime record) (inTime record)
+      zone <- getCurrentTimeZone
+      return $ getMinuteDifference currentTime $ localTimeToUTC zone (inTime record)
+  | otherwise = do
+      zone <- getCurrentTimeZone
+      return $ getMinuteDifference (localTimeToUTC zone (fromJust $ outTime record))
+                                   (localTimeToUTC zone (inTime record))
 
 getMinuteDifference :: UTCTime -> UTCTime -> Int
 getMinuteDifference a b = round $ (realToFrac $ diffUTCTime a b :: Float) / 60
