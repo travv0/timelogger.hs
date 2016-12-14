@@ -22,10 +22,17 @@ data Record = Record { recordNum :: String
                      , billable :: Maybe Bool
                      } deriving (Read, Show, Eq)
 
+commands :: [(Char,Day -> TimeLog -> IO (Maybe (TimeLog,Day)))]
+commands = [ ('q', quit)
+           , ('c', initClockInOut)
+           , ('d', changeDate)
+           , ('l', initPrintLog)
+           ]
+
 main :: IO ()
 main = do
   putStrLn $ "Timelogger v" ++ version
-  putStrLn "Press \"h\" for help\n"
+  putStrLn "Press \"h\" for help"
   currentTime <- getCurrentTime
   let currentDay = utctDay currentTime
   timeLog <- loadTimeLog currentDay
@@ -64,20 +71,33 @@ printCurrInfo Nothing = return ()
 
 handleCommand :: Day -> TimeLog -> String -> IO (Maybe (TimeLog,Day))
 handleCommand day timeLog [] = return $ Just (timeLog,day)
-handleCommand _ _ ('q':_) = return Nothing
-handleCommand day timeLog ('c':_) = do
+handleCommand day timeLog (cmd:_) = do
+  let action = lookup cmd commands
+  if null action
+    then do
+      putStrLn $ "Invalid command: " ++ [cmd]
+      return $ Just (timeLog,day)
+    else
+      (fromJust action) day timeLog
+
+quit :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+quit _ _ = return Nothing
+
+initClockInOut :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+initClockInOut day timeLog = do
   newLog <- handleClockInOut timeLog day
   return $ Just (newLog,day)
-handleCommand _ _ ('d':_) = do
-  newDay <- prompt "Enter new date: "
+
+changeDate :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+changeDate _ _ = do
+  newDay <- prompt "Enter new date:"
   parsedDay <- parseTimeM True defaultTimeLocale "%D" (fromJust newDay)
   newLog <- loadTimeLog parsedDay
   return $ Just (newLog,parsedDay)
-handleCommand day timeLog ('l':_) = do
+
+initPrintLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+initPrintLog day timeLog = do
   printLog day timeLog
-  return $ Just (timeLog,day)
-handleCommand day timeLog cmd = do
-  putStrLn $ "Invalid command: " ++ cmd
   return $ Just (timeLog,day)
 
 handleClockInOut :: TimeLog -> Day -> IO TimeLog
@@ -186,7 +206,6 @@ loadTimeLog day = do
       return $ (read timeLog :: TimeLog)
     else
       return $ TimeLog [] Nothing
-
 
 getMinutes :: Record -> IO Int
 getMinutes record
