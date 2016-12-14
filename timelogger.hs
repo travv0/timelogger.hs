@@ -3,6 +3,7 @@ module Main where
 import Data.Maybe
 import Data.Time
 import System.IO
+import Control.Monad
 
 version :: String
 version = "0.0.1"
@@ -43,15 +44,20 @@ mainLoop _ Nothing = return ()
 printPrompt :: TimeLog -> Day -> IO ()
 printPrompt timeLog day = do
   let curr = current timeLog
-  putStrLn $ "Current date: " ++ (formatTime defaultTimeLocale "%D" day) ++ printCurrInfo curr
+  totalMins <- getTotalMinutes timeLog
+  putStr $ "Current date: " ++ (formatTime defaultTimeLocale "%D" day) ++
+    " - Total minutes: " ++ (show totalMins)
+  printCurrInfo curr
+  putStr "\n"
   currentTime <- getCurrentTime
   putStr $ (formatTime defaultTimeLocale "%R" currentTime) ++ "> "
   hFlush stdout
 
-printCurrInfo :: Maybe Record -> String
-printCurrInfo (Just curr) =
-  " (Current: " ++ (recordNum curr) ++ ")"
-printCurrInfo Nothing = ""
+printCurrInfo :: Maybe Record -> IO ()
+printCurrInfo (Just curr) = do
+  currMinutes <- getMinutes curr
+  putStr $ " (Current: " ++ (recordNum curr) ++ " - Minutes: " ++ show currMinutes ++ ")"
+printCurrInfo Nothing = return ()
 
 handleCommand :: Day -> TimeLog -> String -> IO (Maybe (TimeLog,Day))
 handleCommand day timeLog [] = return $ Just (timeLog,day)
@@ -140,8 +146,16 @@ getMinutes :: Record -> IO Int
 getMinutes record
   | null (outTime record) = do
       currentTime <- getCurrentTime
-      let secondsWorked = ((realToFrac $ diffUTCTime currentTime (inTime record)) :: Float)
-      return $ round (secondsWorked / 60)
-  | otherwise = let secondsWorked = ((realToFrac $ diffUTCTime (fromJust (outTime record))
-                                                               (inTime record)) :: Float)
-                    in return $ round (secondsWorked / 60)
+      return $ getMinuteDifference currentTime (inTime record)
+  | otherwise = return $ getMinuteDifference (fromJust $ outTime record) (inTime record)
+
+getMinuteDifference :: UTCTime -> UTCTime -> Int
+getMinuteDifference a b = round $ (realToFrac $ diffUTCTime a b :: Float) / 60
+
+getTotalMinutes :: TimeLog -> IO Int
+getTotalMinutes timeLog = foldM (\total record ->
+                                   liftM2 (+) (return total) (getMinutes record)) 0
+                          (records timeLog ++ curr)
+                          where curr = if (isJust (current timeLog))
+                                          then [fromJust (current timeLog)]
+                                          else []
