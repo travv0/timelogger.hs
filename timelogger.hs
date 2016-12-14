@@ -27,11 +27,13 @@ commands = [ ('q', quit)
            , ('c', initClockInOut)
            , ('d', changeDate)
            , ('l', initPrintLog)
+           , ('h', printHelp)
+           , ('v', printVersionInfo)
            ]
 
 main :: IO ()
 main = do
-  putStrLn $ "Timelogger v" ++ version
+  printVersion
   putStrLn "Press \"h\" for help"
   currentDay <- getToday
   timeLog <- loadTimeLog currentDay
@@ -86,6 +88,29 @@ initClockInOut day timeLog = do
   newLog <- handleClockInOut timeLog day
   return $ Just (newLog,day)
 
+printHelp :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+printHelp day timeLog = do
+  putStrLn $ "Commands:\n" ++
+    "c: clock in/out\n" ++
+    "d: change date\n" ++
+    "l: print log\n" ++
+    "h: show this help\n" ++
+    "v: show version information\n" ++
+    "q: quit"
+  return $ Just (timeLog,day)
+
+printVersionInfo :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+printVersionInfo day timeLog = do
+  printVersion
+  printCredits
+  return $ Just (timeLog,day)
+
+printVersion :: IO ()
+printVersion = putStrLn $ "Timelogger v" ++ version
+
+printCredits :: IO ()
+printCredits = putStrLn $ "Created by Travis"
+
 changeDate :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 changeDate _ _ = do
   newDay <- prompt "Enter new date:"
@@ -125,7 +150,7 @@ getLocalTime = do
 
 clockIn :: TimeLog -> IO TimeLog
 clockIn timeLog = do
-  num <- prompt "Enter item ID: "
+  num <- prompt "Enter item ID:"
   if (null num)
     then do
       putStrLn "Canceled"
@@ -137,7 +162,7 @@ clockIn timeLog = do
 
 clockOut :: TimeLog -> IO TimeLog
 clockOut timeLog = do
-  desc <- prompt "Enter a description of what you worked on: "
+  desc <- prompt "Enter a description of what you worked on:"
   if (null desc)
     then do
       putStrLn "Canceled"
@@ -152,7 +177,7 @@ clockOut timeLog = do
 
 prompt :: String -> IO (Maybe String)
 prompt s = do
-  putStr s
+  putStr $ s ++ " "
   hFlush stdout
   response <- getLine
   if (null response)
