@@ -6,6 +6,7 @@ import Data.List
 import System.IO
 import System.Directory
 import Control.Monad
+import Control.Exception
 
 version :: String
 version = "0.0.1"
@@ -112,11 +113,19 @@ printCredits :: IO ()
 printCredits = putStrLn $ "Created by Travis"
 
 changeDate :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
-changeDate _ _ = do
-  newDay <- prompt "Enter new date:"
-  parsedDay <- parseTimeM True defaultTimeLocale "%D" (fromJust newDay)
-  newLog <- loadTimeLog parsedDay
-  return $ Just (newLog,parsedDay)
+changeDate day timeLog = do
+  newDay <- prompt "Enter new date (leave blank for today):"
+  parsedDayE <- if isJust (newDay)
+                then try $ parseTimeM True defaultTimeLocale "%D" (fromJust newDay) :: IO (Either IOError Day)
+                else do today <- getToday
+                        return $ Right today
+  case parsedDayE of
+    Left _ -> do
+      putStrLn "Invalid date format. Expected MM/DD/YY."
+      return $ Just (timeLog,day)
+    Right parsedDay -> do
+      newLog <- loadTimeLog parsedDay
+      return $ Just (newLog,parsedDay)
 
 initPrintLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 initPrintLog day timeLog = do
