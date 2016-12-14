@@ -182,7 +182,7 @@ clockOut timeLog = do
       let curr = fromJust $ current timeLog
           newRecord = Record (recordNum curr) (inTime curr) (Just currentTime) desc (Just bill)
       putStrLn $ "Clocked out at " ++ formatTime defaultTimeLocale "%R" currentTime
-      return $ TimeLog (newRecord : records timeLog) Nothing
+      return $ TimeLog (records timeLog ++ [newRecord]) Nothing
 
 prompt :: String -> IO (Maybe String)
 prompt s = do
