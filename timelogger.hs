@@ -155,6 +155,7 @@ changeDate day timeLog = do
       newLog <- loadTimeLog parsedDay
       return $ Just (newLog,parsedDay)
 
+-- TODO: handle bad input
 editTimeLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 editTimeLog day timeLog = do
   printTimeLogList timeLog
@@ -162,6 +163,7 @@ editTimeLog day timeLog = do
   newLog <- if isJust num
             then editRecordInLog timeLog $ read $ fromJust num
             else return timeLog
+  saveTimeLog day newLog
   return $ Just (newLog,day)
 
 editRecordInLog :: TimeLog -> Int -> IO TimeLog
@@ -174,7 +176,7 @@ editRecordInLog timeLog n
       newRcd <- editRecord (rcds !! (n - 1))
       return $ TimeLog (replaceAtIndex (n - 1) newRcd rcds) (current timeLog)
 
--- TODO: finish this function
+-- TODO: handle bad input
 editRecord :: Record -> IO Record
 editRecord rcd = do
   printEditOptions rcd
@@ -185,10 +187,25 @@ editRecord rcd = do
       if isJust num
         then return $ Record (fromJust num) (inTime rcd) (outTime rcd) (description rcd) (billable rcd)
         else return rcd
-    2 -> return rcd
-    3 -> return rcd
-    4 -> return rcd
-    5 -> return rcd
+    2 -> do
+      time <- prompt $ "Enter new in-time (changing from " ++ formatTime defaultTimeLocale "%R" (inTime rcd) ++ "):"
+      let date = formatTime defaultTimeLocale "%F" (inTime rcd)
+      parsedTime <- parseTimeM True defaultTimeLocale "%F%R" $ date ++ fromJust time
+      return $ Record (recordNum rcd) parsedTime (outTime rcd) (description rcd) (billable rcd)
+    3 -> do
+      time <- prompt $ "Enter new out-time (changing from " ++
+        formatTime defaultTimeLocale "%R" (fromJust (outTime rcd)) ++ "):"
+      let date = formatTime defaultTimeLocale "%F" $ fromJust (outTime rcd)
+      parsedTime <- parseTimeM True defaultTimeLocale "%F%R" $ date ++ fromJust time
+      return $ Record (recordNum rcd) (inTime rcd) (Just parsedTime) (description rcd) (billable rcd)
+    4 -> do
+      desc <- prompt "Enter new description:"
+      if isJust desc
+        then return $ Record (recordNum rcd) (inTime rcd) (outTime rcd) desc (billable rcd)
+        else return rcd
+    5 -> do
+      bill <- promptYN "Was this work billable?"
+      return $ Record (recordNum rcd) (inTime rcd) (outTime rcd) (description rcd) (Just bill)
     _ -> do
       putStrLn "Out of range"
       return rcd
