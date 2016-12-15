@@ -26,8 +26,11 @@ data Record = Record { recordNum :: String
 commands :: [(Char,Day -> TimeLog -> IO (Maybe (TimeLog,Day)))]
 commands = [ ('q', quit)
            , ('c', initClockInOut)
+           , ('C', initDelayedClockInOut)
            , ('d', changeDate)
-           , ('l', initPrintLog)
+           , ('l', printLog)
+           , ('L', printTimeTable)
+           , ('e', editTimeLog)
            , ('h', printHelp)
            , ('v', printVersionInfo)
            ]
@@ -86,15 +89,39 @@ quit _ _ = return Nothing
 
 initClockInOut :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 initClockInOut day timeLog = do
-  newLog <- handleClockInOut timeLog day
+  currentTime <- getLocalTime
+  newLog <- handleClockInOut timeLog currentTime day
   return $ Just (newLog,day)
+
+initDelayedClockInOut :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+initDelayedClockInOut day timeLog = do
+  inputtedTime <- prompt "How many minutes ago to clock in/out?"
+  if isJust inputtedTime
+    then do
+      time <- handleInputtedTime (fromJust inputtedTime)
+      newLog <- handleClockInOut timeLog time day
+      return $ Just (newLog,day)
+    else do
+      putStrLn "Canceled"
+      return $ Just (timeLog,day)
+
+handleInputtedTime :: String -> IO LocalTime
+handleInputtedTime s = do
+  utcTime <- getCurrentTime
+  zone <- getCurrentTimeZone
+  let time = utctDayTime utcTime
+      offset = secondsToDiffTime $ read s * 60
+      newTime = UTCTime (utctDay utcTime) (time - offset)
+  return $ utcToLocalTime zone newTime
 
 printHelp :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 printHelp day timeLog = do
   putStrLn $ "Commands:\n" ++
     "c: clock in/out\n" ++
+    "C: delayed clock in/out\n" ++
     "d: change date\n" ++
     "l: print log\n" ++
+    "L: print timetable\n" ++
     "h: show this help\n" ++
     "v: show version information\n" ++
     "q: quit"
@@ -114,9 +141,10 @@ printCredits = putStrLn $ "Created by Travis"
 
 changeDate :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 changeDate day timeLog = do
-  newDay <- prompt "Enter new date (leave blank for today):"
+  newDay <- prompt "Enter new date in format MM/DD/YY (leave blank for today):"
   parsedDayE <- if isJust (newDay)
-                then try $ parseTimeM True defaultTimeLocale "%D" (fromJust newDay) :: IO (Either IOError Day)
+                then try $ parseTimeM True defaultTimeLocale "%-m/%-d/%-y" (fromJust newDay)
+                     :: IO (Either IOError Day)
                 else do today <- getToday
                         return $ Right today
   case parsedDayE of
@@ -127,17 +155,79 @@ changeDate day timeLog = do
       newLog <- loadTimeLog parsedDay
       return $ Just (newLog,parsedDay)
 
-initPrintLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
-initPrintLog day timeLog = do
-  printLog day timeLog
-  return $ Just (timeLog,day)
+editTimeLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+editTimeLog day timeLog = do
+  printTimeLogList timeLog
+  num <- prompt "Enter ID of record to change:"
+  newLog <- if isJust num
+            then editRecordInLog timeLog $ read $ fromJust num
+            else return timeLog
+  return $ Just (newLog,day)
 
-handleClockInOut :: TimeLog -> Day -> IO TimeLog
-handleClockInOut timeLog day = do
+editRecordInLog :: TimeLog -> Int -> IO TimeLog
+editRecordInLog timeLog n
+  | n - 1 == length (records timeLog) = do
+      newCurr <- editRecord $ fromJust (current timeLog)
+      return $ TimeLog (records timeLog) $ Just newCurr
+  | otherwise = do
+      let rcds = (records timeLog)
+      newRcd <- editRecord (rcds !! (n - 1))
+      return $ TimeLog (replaceAtIndex (n - 1) newRcd rcds) (current timeLog)
+
+-- TODO: finish this function
+editRecord :: Record -> IO Record
+editRecord rcd = do
+  printEditOptions rcd
+  ind <- prompt "Enter ID of desired action:"
+  case (read $ fromJust ind) :: Int of
+    1 -> do
+      num <- prompt "Enter new record number:"
+      if isJust num
+        then return $ Record (fromJust num) (inTime rcd) (outTime rcd) (description rcd) (billable rcd)
+        else return rcd
+    2 -> return rcd
+    3 -> return rcd
+    4 -> return rcd
+    5 -> return rcd
+    _ -> do
+      putStrLn "Out of range"
+      return rcd
+
+printEditOptions :: Record -> IO ()
+printEditOptions rcd = do
+  putStrLn "1. Edit item number"
+  putStrLn "2. Edit in-time"
+  when (isJust (outTime rcd))
+    $ putStrLn "3. Edit out-time"
+  when (isJust (description rcd))
+    $ putStrLn "4. Edit description"
+  when (isJust (billable rcd))
+    $ putStrLn "5. Edit billable"
+
+replaceAtIndex :: Int -> a -> [a] -> [a]
+replaceAtIndex n item ls = a ++ (item:b) where (a, (_:b)) = splitAt n ls
+
+printTimeLogList :: TimeLog -> IO ()
+printTimeLogList timeLog = do
+  let mCurr = (current timeLog)
+      descCurr = if isJust mCurr
+                 then let curr = fromJust mCurr
+                          in [Record (recordNum curr) (inTime curr) Nothing (Just "Currently clocked in") Nothing]
+                 else []
+  _ <- sequence $ map putStrLn (zipWith (\num rcd ->
+                                           show num ++ ". " ++ (recordNum rcd) ++ " - " ++
+                                          fromJust (description rcd))
+                                ([1..] :: [Int]) $ records timeLog ++ descCurr)
+  return ()
+
+
+
+handleClockInOut :: TimeLog -> LocalTime -> Day -> IO TimeLog
+handleClockInOut timeLog time day = do
   currentDay <- getToday
   if (day == currentDay)
     then do
-      newLog <- if (clockedIn timeLog) then (clockOut timeLog) else (clockIn timeLog)
+      newLog <- if (clockedIn timeLog) then (clockOut timeLog time) else (clockIn timeLog time)
       saveTimeLog day newLog
       return newLog
     else do
@@ -157,20 +247,19 @@ getLocalTime = do
   zonedTime <- getZonedTime
   return $ zonedTimeToLocalTime zonedTime
 
-clockIn :: TimeLog -> IO TimeLog
-clockIn timeLog = do
+clockIn :: TimeLog -> LocalTime -> IO TimeLog
+clockIn timeLog time = do
   num <- prompt "Enter item ID:"
   if (null num)
     then do
       putStrLn "Canceled"
       return timeLog
     else do
-      currentTime <- getLocalTime
-      putStrLn $ "Clocked in at " ++ formatTime defaultTimeLocale "%R" currentTime
-      return $ TimeLog (records timeLog) (Just $ Record (fromJust num) currentTime Nothing Nothing Nothing)
+      putStrLn $ "Clocked in at " ++ formatTime defaultTimeLocale "%R" time
+      return $ TimeLog (records timeLog) (Just $ Record (fromJust num) time Nothing Nothing Nothing)
 
-clockOut :: TimeLog -> IO TimeLog
-clockOut timeLog = do
+clockOut :: TimeLog -> LocalTime -> IO TimeLog
+clockOut timeLog time = do
   desc <- prompt "Enter a description of what you worked on:"
   if (null desc)
     then do
@@ -178,10 +267,9 @@ clockOut timeLog = do
       return timeLog
     else do
       bill <- promptYN "Was this work billable?"
-      currentTime <- getLocalTime
       let curr = fromJust $ current timeLog
-          newRecord = Record (recordNum curr) (inTime curr) (Just currentTime) desc (Just bill)
-      putStrLn $ "Clocked out at " ++ formatTime defaultTimeLocale "%R" currentTime
+          newRecord = Record (recordNum curr) (inTime curr) (Just time) desc (Just bill)
+      putStrLn $ "Clocked out at " ++ formatTime defaultTimeLocale "%R" time
       return $ TimeLog (records timeLog ++ [newRecord]) Nothing
 
 prompt :: String -> IO (Maybe String)
@@ -206,20 +294,47 @@ readYorN _ = do
   putStr "Please type \"y\" for yes or \"n\" for no. "
   getLine >>= readYorN
 
-printLog :: Day -> TimeLog -> IO ()
+seperatorLen :: Int
+seperatorLen = 50
+
+seperatorChar :: Char
+seperatorChar = '-'
+
+seperator :: String
+seperator = replicate seperatorLen seperatorChar
+
+printLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 printLog day timeLog = do
   putStrLn $ "\nTime log for " ++ show day
   let recs = records timeLog
   let ids = getRecordNums recs
   _ <- mapM (printRecordsForNum recs) ids
-  putStrLn "\n-------------------------------------"
+  putStrLn $ "\n" ++ seperator
+  return $ Just (timeLog,day)
+
+printTimeTable :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+printTimeTable day timeLog = do
+  let singletonCurr = if isJust (current timeLog) then [fromJust (current timeLog)] else []
+  _ <- mapM printTimeTableRow $ (records timeLog) ++ singletonCurr
+  return $ Just (timeLog,day)
+
+printTimeTableRow :: Record -> IO ()
+printTimeTableRow rcd = do
+  let out = if isJust (outTime rcd)
+            then formatTime defaultTimeLocale "%R" (fromJust (outTime rcd))
+            else "....."
+      desc = if isJust (description rcd)
+             then fromJust (description rcd)
+             else "Currently clocked in"
+  putStrLn $ formatTime defaultTimeLocale "%R" (inTime rcd) ++ "-" ++
+    out ++ "   " ++ (recordNum rcd) ++ " - " ++ desc
 
 getRecordNums :: Records -> [String]
 getRecordNums recs = nub $ map (\rcd -> recordNum rcd) recs
 
 printRecordsForNum :: Records -> String -> IO ()
 printRecordsForNum recs num = do
-  putStrLn "\n-------------------------------------\n"
+  putStrLn $ "\n" ++ seperator ++ "\n"
   putStrLn $ num ++ ":"
   _ <- mapM printRecord (filter (\rcd -> ((recordNum rcd) == num)) recs)
   return ()
