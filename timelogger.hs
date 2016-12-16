@@ -122,6 +122,7 @@ printHelp day timeLog = do
     "d: change date\n" ++
     "l: print log\n" ++
     "L: print timetable\n" ++
+    "e: edit record\n" ++
     "h: show this help\n" ++
     "v: show version information\n" ++
     "q: quit"
@@ -155,60 +156,115 @@ changeDate day timeLog = do
       newLog <- loadTimeLog parsedDay
       return $ Just (newLog,parsedDay)
 
--- TODO: handle bad input
 editTimeLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 editTimeLog day timeLog = do
   printTimeLogList timeLog
   num <- prompt "Enter ID of record to change:"
   newLog <- if isJust num
-            then editRecordInLog timeLog $ read $ fromJust num
-            else return timeLog
+            then do
+              editRecordInLog timeLog (reads $ fromJust num :: [(Int,String)])
+            else do
+              putStrLn "Canceled"
+              return timeLog
   saveTimeLog day newLog
   return $ Just (newLog,day)
 
-editRecordInLog :: TimeLog -> Int -> IO TimeLog
-editRecordInLog timeLog n
+editRecordInLog :: TimeLog -> [(Int,String)] -> IO TimeLog
+editRecordInLog timeLog [(n,_)]
   | n - 1 == length (records timeLog) = do
       newCurr <- editRecord $ fromJust (current timeLog)
       return $ TimeLog (records timeLog) $ Just newCurr
-  | otherwise = do
+  | n <= length (records timeLog) && n > 0 = do
       let rcds = (records timeLog)
       newRcd <- editRecord (rcds !! (n - 1))
       return $ TimeLog (replaceAtIndex (n - 1) newRcd rcds) (current timeLog)
+  | otherwise = do
+      putStrLn "Out of range"
+      return timeLog
+editRecordInLog timeLog _ = do
+  putStrLn "Invalid input"
+  return timeLog
 
--- TODO: handle bad input
 editRecord :: Record -> IO Record
 editRecord rcd = do
   printEditOptions rcd
   ind <- prompt "Enter ID of desired action:"
-  case (read $ fromJust ind) :: Int of
-    1 -> do
-      num <- prompt "Enter new record number:"
-      if isJust num
-        then return $ Record (fromJust num) (inTime rcd) (outTime rcd) (description rcd) (billable rcd)
-        else return rcd
-    2 -> do
-      time <- prompt $ "Enter new in-time (changing from " ++ formatTime defaultTimeLocale "%R" (inTime rcd) ++ "):"
-      let date = formatTime defaultTimeLocale "%F" (inTime rcd)
-      parsedTime <- parseTimeM True defaultTimeLocale "%F%R" $ date ++ fromJust time
-      return $ Record (recordNum rcd) parsedTime (outTime rcd) (description rcd) (billable rcd)
-    3 -> do
-      time <- prompt $ "Enter new out-time (changing from " ++
-        formatTime defaultTimeLocale "%R" (fromJust (outTime rcd)) ++ "):"
-      let date = formatTime defaultTimeLocale "%F" $ fromJust (outTime rcd)
-      parsedTime <- parseTimeM True defaultTimeLocale "%F%R" $ date ++ fromJust time
-      return $ Record (recordNum rcd) (inTime rcd) (Just parsedTime) (description rcd) (billable rcd)
-    4 -> do
-      desc <- prompt "Enter new description:"
-      if isJust desc
-        then return $ Record (recordNum rcd) (inTime rcd) (outTime rcd) desc (billable rcd)
-        else return rcd
-    5 -> do
-      bill <- promptYN "Was this work billable?"
-      return $ Record (recordNum rcd) (inTime rcd) (outTime rcd) (description rcd) (Just bill)
-    _ -> do
+  if isJust ind
+    then handleEditID rcd (reads $ fromJust ind :: [(Int,String)])
+    else do
+      putStrLn "Canceled"
+      return rcd
+
+handleEditID :: Record -> [(Int,String)] -> IO Record
+handleEditID rcd [(ind,_)] = do
+  if isJust (outTime rcd) || ind < 3 && ind > 0
+    then
+    case ind of
+      1 -> editRecordNum rcd
+      2 -> editInTime rcd
+      3 -> editOutTime rcd
+      4 -> editDescription rcd
+      5 -> editBillable rcd
+      _ -> do
+        putStrLn "Out of range"
+        return rcd
+    else do
       putStrLn "Out of range"
       return rcd
+handleEditID rcd _ = do
+  putStrLn "Canceled"
+  return rcd
+
+editRecordNum :: Record -> IO Record
+editRecordNum rcd = do
+  num <- prompt "Enter new record number:"
+  if isJust num
+    then return $ Record (fromJust num) (inTime rcd) (outTime rcd) (description rcd) (billable rcd)
+    else do
+      putStrLn "Canceled"
+      return rcd
+
+parseTimeInput :: LocalTime -> String -> IO (Maybe LocalTime)
+parseTimeInput day time = do
+  let date = formatTime defaultTimeLocale "%F " day
+  parsedTime <- try $ parseTimeM True defaultTimeLocale "%F %k:%M" $ date ++ time :: IO (Either IOError LocalTime)
+  case parsedTime of
+    Left _ -> do
+      putStrLn "Invalid input.  Expected time in format HH:MM."
+      return Nothing
+    Right time -> return $ Just time
+
+editInTime :: Record -> IO Record
+editInTime rcd = do
+  time <- prompt $ "Enter new in-time (changing from " ++ formatTime defaultTimeLocale "%R" (inTime rcd) ++ "):"
+  parsedTime <- if isJust time
+                then parseTimeInput (inTime rcd) $ fromJust time
+                else return Nothing
+  if isJust parsedTime
+    then return $ Record (recordNum rcd) (fromJust parsedTime) (outTime rcd) (description rcd) (billable rcd)
+    else return rcd
+
+editOutTime :: Record -> IO Record
+editOutTime rcd = do
+  time <- prompt $ "Enter new out-time (changing from " ++
+    formatTime defaultTimeLocale "%R" (fromJust (outTime rcd)) ++ "):"
+  let date = formatTime defaultTimeLocale "%F" $ fromJust (outTime rcd)
+  parsedTime <- parseTimeM True defaultTimeLocale "%F%R" $ date ++ fromJust time
+  return $ Record (recordNum rcd) (inTime rcd) (Just parsedTime) (description rcd) (billable rcd)
+
+editDescription :: Record -> IO Record
+editDescription rcd = do
+  desc <- prompt "Enter new description:"
+  if isJust desc
+    then return $ Record (recordNum rcd) (inTime rcd) (outTime rcd) desc (billable rcd)
+    else do
+      putStrLn "Canceled"
+      return rcd
+
+editBillable :: Record -> IO Record
+editBillable rcd = do
+  bill <- promptYN "Was this work billable?"
+  return $ Record (recordNum rcd) (inTime rcd) (outTime rcd) (description rcd) (Just bill)
 
 printEditOptions :: Record -> IO ()
 printEditOptions rcd = do
