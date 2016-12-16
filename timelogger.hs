@@ -23,6 +23,11 @@ data Record = Record { recordNum :: String
                      , billable :: Maybe Bool
                      } deriving (Read, Show, Eq)
 
+dataFilePath :: IO FilePath
+dataFilePath = do
+  home <- getHomeDirectory
+  return $ home ++ "/Documents/timelogger/data/"
+
 commands :: [(Char,Day -> TimeLog -> IO (Maybe (TimeLog,Day)))]
 commands = [ ('q', quit)
            , ('c', initClockInOut)
@@ -38,6 +43,8 @@ commands = [ ('q', quit)
 main :: IO ()
 main = do
   printVersion
+  dataPath <- dataFilePath
+  createDirectoryIfMissing True dataPath
   putStrLn "Press \"h\" for help"
   currentDay <- getToday
   timeLog <- loadTimeLog currentDay
@@ -424,16 +431,18 @@ formatFileName :: Day -> String
 formatFileName day = (formatTime defaultTimeLocale "%_Y%m%d" day)
 
 saveTimeLog :: Day -> TimeLog -> IO ()
-saveTimeLog day timeLog =
-  writeFile (formatFileName day) $ show timeLog
+saveTimeLog day timeLog = do
+  dataPath <- dataFilePath
+  writeFile (dataPath ++ formatFileName day) $ show timeLog
 
 loadTimeLog :: Day -> IO TimeLog
 loadTimeLog day = do
-  let fileName = formatFileName day
+  dataPath <- dataFilePath
+  let fileName = dataPath ++ formatFileName day
   fileExists <- doesFileExist fileName
   if fileExists
     then do
-      timeLog <- readFile (formatFileName day)
+      timeLog <- readFile fileName
       return $ (read timeLog :: TimeLog)
     else
       return $ TimeLog [] Nothing
