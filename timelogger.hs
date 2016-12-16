@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.0.0"
+version = "1.1.0"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -329,7 +329,10 @@ getLocalTime = do
 
 clockIn :: TimeLog -> LocalTime -> IO TimeLog
 clockIn timeLog time = do
-  num <- prompt "Enter item ID:"
+  unless (null (records timeLog))
+    $ putStrLn "Items worked on today:"
+  _ <- sequence $ fmap putStrLn $ getRecordNums (records timeLog)
+  num <- prompt "\nEnter item ID:"
   if (null num)
     then do
       putStrLn "Canceled"
