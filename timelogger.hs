@@ -232,7 +232,7 @@ parseTimeInput day time = do
     Left _ -> do
       putStrLn "Invalid input.  Expected time in format HH:MM."
       return Nothing
-    Right time -> return $ Just time
+    Right newTime -> return $ Just newTime
 
 editInTime :: Record -> IO Record
 editInTime rcd = do
