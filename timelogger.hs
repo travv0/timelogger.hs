@@ -54,12 +54,12 @@ mainLoop :: Day -> Maybe TimeLog -> IO ()
 mainLoop day (Just timeLog) = do
   printPrompt timeLog day
   result <- getLine >>= handleCommand day timeLog
-  if (null result)
-    then return ()
-    else do
-      let newDay = snd $ fromJust result
-          newLog = fst $ fromJust result
+  case result of
+    Just r -> do
+      let newDay = snd r
+          newLog = fst r
       mainLoop newDay (Just newLog)
+    Nothing -> return ()
 mainLoop _ Nothing = return ()
 
 printPrompt :: TimeLog -> Day -> IO ()
@@ -83,13 +83,11 @@ printCurrInfo Nothing = return ()
 handleCommand :: Day -> TimeLog -> String -> IO (Maybe (TimeLog,Day))
 handleCommand day timeLog [] = return $ Just (timeLog,day)
 handleCommand day timeLog (cmd:_) = do
-  let action = lookup cmd commands
-  if null action
-    then do
+  case lookup cmd commands of
+    Just action -> action day timeLog
+    Nothing -> do
       putStrLn $ "Invalid command: " ++ [cmd]
       return $ Just (timeLog,day)
-    else
-      (fromJust action) day timeLog
 
 quit :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 quit _ _ = return Nothing
@@ -103,23 +101,35 @@ initClockInOut day timeLog = do
 initDelayedClockInOut :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 initDelayedClockInOut day timeLog = do
   inputtedTime <- prompt "How many minutes ago to clock in/out?"
-  if isJust inputtedTime
-    then do
-      time <- handleInputtedTime (fromJust inputtedTime)
-      newLog <- handleClockInOut timeLog time day
-      return $ Just (newLog,day)
-    else do
+  case inputtedTime of
+    Just t -> do
+      time <- handleInputtedMinutes (LocalTime day (TimeOfDay 0 0 0)) t
+      case time of
+        Just t2 -> do
+          newLog <- handleClockInOut timeLog t2 day
+          return $ Just (newLog,day)
+        Nothing -> return $ Just (timeLog,day)
+    Nothing -> do
       putStrLn "Canceled"
       return $ Just (timeLog,day)
 
-handleInputtedTime :: String -> IO LocalTime
-handleInputtedTime s = do
+handleInputtedMinutes :: LocalTime -> String -> IO (Maybe LocalTime)
+handleInputtedMinutes day s = do
   utcTime <- getCurrentTime
   zone <- getCurrentTimeZone
-  let time = utctDayTime utcTime
-      offset = secondsToDiffTime $ read s * 60
-      newTime = UTCTime (utctDay utcTime) (time - offset)
-  return $ utcToLocalTime zone newTime
+  let currTime = utctDayTime utcTime
+  newTime <- parseTimeInput day s
+  case newTime of
+    Just t -> return $ Just t
+    Nothing -> do
+      case reads s of
+        [(time,_)] -> do
+          let offset = secondsToDiffTime $ time * 60
+              adjustedTime = UTCTime (utctDay utcTime) (currTime - offset)
+          return $ Just $ utcToLocalTime zone adjustedTime
+        _ -> do
+          putStrLn "Invalid input."
+          return Nothing
 
 printHelp :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 printHelp day timeLog = do
@@ -225,9 +235,10 @@ handleEditID rcd _ = do
 editRecordNum :: Record -> IO Record
 editRecordNum rcd = do
   num <- prompt "Enter new record number:"
-  if isJust num
-    then return $ Record (fromJust num) (inTime rcd) (outTime rcd) (description rcd) (billable rcd)
-    else do
+  case num of
+    Just n ->
+      return $ Record n (inTime rcd) (outTime rcd) (description rcd) (billable rcd)
+    Nothing -> do
       putStrLn "Canceled"
       return rcd
 
@@ -236,9 +247,7 @@ parseTimeInput day time = do
   let date = formatTime defaultTimeLocale "%F " day
   parsedTime <- try $ parseTimeM True defaultTimeLocale "%F %k:%M" $ date ++ time :: IO (Either IOError LocalTime)
   case parsedTime of
-    Left _ -> do
-      putStrLn "Invalid input.  Expected time in format HH:MM."
-      return Nothing
+    Left _ -> return Nothing
     Right newTime -> return $ Just newTime
 
 editInTime :: Record -> IO Record
@@ -247,17 +256,28 @@ editInTime rcd = do
   parsedTime <- if isJust time
                 then parseTimeInput (inTime rcd) $ fromJust time
                 else return Nothing
-  if isJust parsedTime
-    then return $ Record (recordNum rcd) (fromJust parsedTime) (outTime rcd) (description rcd) (billable rcd)
-    else return rcd
+  case parsedTime of
+    Just t -> return $ Record (recordNum rcd) t (outTime rcd) (description rcd) (billable rcd)
+    Nothing -> do
+      putStrLn "Invalid input.  Expected time in format HH:MM."
+      return rcd
 
 editOutTime :: Record -> IO Record
 editOutTime rcd = do
   time <- prompt $ "Enter new out-time (changing from " ++
-    formatTime defaultTimeLocale "%R" (fromJust (outTime rcd)) ++ "):"
-  let date = formatTime defaultTimeLocale "%F" $ fromJust (outTime rcd)
-  parsedTime <- parseTimeM True defaultTimeLocale "%F%R" $ date ++ fromJust time
-  return $ Record (recordNum rcd) (inTime rcd) (Just parsedTime) (description rcd) (billable rcd)
+    formatTime defaultTimeLocale "%R" (fromJust $ outTime rcd) ++ "):"
+  case time of
+    Just nt -> do
+      parsedTime <- parseTimeInput (fromJust $ outTime rcd) nt
+      case parsedTime of
+        Just pt ->
+          return $ Record (recordNum rcd) (inTime rcd) (Just pt) (description rcd) (billable rcd)
+        Nothing -> do
+          putStrLn "Invalid input.  Expected time in format HH:MM."
+          return rcd
+    Nothing -> do
+      putStrLn "Invalid input.  Expected time in format HH:MM."
+      return rcd
 
 editDescription :: Record -> IO Record
 editDescription rcd = do
@@ -333,27 +353,27 @@ clockIn timeLog time = do
     $ putStrLn "Items worked on today:"
   _ <- sequence $ fmap putStrLn $ getRecordNums (records timeLog)
   num <- prompt "\nEnter item ID:"
-  if (null num)
-    then do
+  case num of
+    Just n -> do
+      putStrLn $ "Clocked in at " ++ formatTime defaultTimeLocale "%R" time
+      return $ TimeLog (records timeLog) (Just $ Record n time Nothing Nothing Nothing)
+    Nothing -> do
       putStrLn "Canceled"
       return timeLog
-    else do
-      putStrLn $ "Clocked in at " ++ formatTime defaultTimeLocale "%R" time
-      return $ TimeLog (records timeLog) (Just $ Record (fromJust num) time Nothing Nothing Nothing)
 
 clockOut :: TimeLog -> LocalTime -> IO TimeLog
 clockOut timeLog time = do
   desc <- prompt "Enter a description of what you worked on:"
-  if (null desc)
-    then do
-      putStrLn "Canceled"
-      return timeLog
-    else do
+  case desc of
+    Just d -> do
       bill <- promptYN "Was this work billable?"
       let curr = fromJust $ current timeLog
-          newRecord = Record (recordNum curr) (inTime curr) (Just time) desc (Just bill)
+          newRecord = Record (recordNum curr) (inTime curr) (Just time) (Just d) (Just bill)
       putStrLn $ "Clocked out at " ++ formatTime defaultTimeLocale "%R" time
       return $ TimeLog (records timeLog ++ [newRecord]) Nothing
+    Nothing -> do
+      putStrLn "Canceled"
+      return timeLog
 
 prompt :: String -> IO (Maybe String)
 prompt s = do
