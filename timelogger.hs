@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.2.0"
+version = "1.2.1"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -408,7 +408,7 @@ seperator = replicate seperatorLen seperatorChar
 
 printLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 printLog day timeLog = do
-  putStrLn $ "\nTime log for " ++ show day
+  putStrLn $ "\nTime log for " ++ formatTime defaultTimeLocale "%D" day
   let recs = records timeLog
   let ids = getRecordNums recs
   _ <- mapM (printRecordsForNum recs) ids
