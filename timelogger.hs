@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.2.1"
+version = "1.2.2"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -395,6 +395,7 @@ readYorN "y" = return True
 readYorN "n" = return False
 readYorN _ = do
   putStr "Please type \"y\" for yes or \"n\" for no. "
+  hFlush stdout
   getLine >>= readYorN
 
 seperatorLen :: Int
