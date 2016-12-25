@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.2.2"
+version = "1.2.3"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -188,7 +188,7 @@ editTimeLog day timeLog = do
 
 editRecordInLog :: TimeLog -> [(Int,String)] -> IO TimeLog
 editRecordInLog timeLog [(n,_)]
-  | n - 1 == length (records timeLog) = do
+  | n - 1 == length (records timeLog) && clockedIn timeLog = do
       newCurr <- editRecord $ fromJust (current timeLog)
       return $ TimeLog (records timeLog) $ Just newCurr
   | n <= length (records timeLog) && n > 0 = do
