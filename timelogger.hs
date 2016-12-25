@@ -175,16 +175,21 @@ changeDate day timeLog = do
 
 editTimeLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 editTimeLog day timeLog = do
-  printTimeLogList timeLog
-  num <- prompt "Enter ID of record to change:"
-  newLog <- if isJust num
-            then do
-              editRecordInLog timeLog (reads $ fromJust num :: [(Int,String)])
-            else do
-              putStrLn "Canceled"
-              return timeLog
-  saveTimeLog day newLog
-  return $ Just (newLog,day)
+  case timeLog of
+    TimeLog [] Nothing -> do
+      putStrLn "No records for this day."
+      return $ Just (timeLog,day)
+    _ -> do
+      printTimeLogList timeLog
+      num <- prompt "Enter ID of record to change:"
+      newLog <- if isJust num
+                then do
+                  editRecordInLog timeLog (reads $ fromJust num :: [(Int,String)])
+                else do
+                  putStrLn "Canceled"
+                  return timeLog
+      saveTimeLog day newLog
+      return $ Just (newLog,day)
 
 editRecordInLog :: TimeLog -> [(Int,String)] -> IO TimeLog
 editRecordInLog timeLog [(n,_)]
