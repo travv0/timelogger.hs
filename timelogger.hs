@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.2.3"
+version = "1.3.1"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -462,9 +462,10 @@ printRecord :: Record -> IO ()
 printRecord rcd = do
   mins <- getMinutes rcd
   putStrLn $ "\nDescription: " ++ fromJust (description rcd)
-  putStrLn $ show mins ++ " Minutes, " ++  if fromJust (billable rcd)
-                                           then "Billable"
-                                           else "Non-billable"
+  putStrLn $ show mins ++ " Minute" ++ (if mins /= 1 then "s" else "") ++ ", " ++
+                       if fromJust (billable rcd)
+                       then "Billable"
+                       else "Non-billable"
 
 formatFileName :: Day -> String
 formatFileName day = (formatTime defaultTimeLocale "%_Y%m%d" day)
