@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.3.3"
+version = "1.3.4"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -175,18 +175,13 @@ changeDate day timeLog = do
 parseDate :: String -> Day -> IO (Either IOError Day)
 parseDate s today
   | (length . filter (=='/')) s == 2 = try $ parseTimeM True defaultTimeLocale "%-m/%-d/%-y" s
-                                       :: IO (Either IOError Day)
   | (length . filter (=='/')) s == 1 = try $ parseTimeM True defaultTimeLocale "%-m/%-d/%-y"
                                        (s ++ formatTime defaultTimeLocale "/%y" today)
-                                       :: IO (Either IOError Day)
   | (length . filter (=='-')) s == 2 = try $ parseTimeM True defaultTimeLocale "%-m-%-d-%-y" s
-                                       :: IO (Either IOError Day)
   | (length . filter (=='-')) s == 1 = try $ parseTimeM True defaultTimeLocale "%-m-%-d-%-y"
                                        (s ++ formatTime defaultTimeLocale "-%y" today)
-                                       :: IO (Either IOError Day)
   | otherwise = try $ parseTimeM True defaultTimeLocale "%-d/%-m/%-y"
                 (s ++ formatTime defaultTimeLocale "/%m/%y" today)
-                :: IO (Either IOError Day)
 
 editTimeLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 editTimeLog day timeLog = do
