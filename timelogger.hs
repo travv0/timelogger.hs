@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.3.2"
+version = "1.3.3"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -26,7 +26,7 @@ data Record = Record { recordNum :: String
 dataFilePath :: IO FilePath
 dataFilePath = do
   home <- getHomeDirectory
-  return $ home ++ "/Documents/timelogger/data/"
+  return $ home ++ "/Documents/timelogger.hs/data/"
 
 commands :: [(Char,Day -> TimeLog -> IO (Maybe (TimeLog,Day)))]
 commands = [ ('q', quit)
