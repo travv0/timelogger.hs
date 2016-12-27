@@ -159,19 +159,29 @@ printCredits = putStrLn $ "Created by Travis"
 
 changeDate :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 changeDate day timeLog = do
-  newDay <- prompt "Enter new date in format MM/DD/YY (leave blank for today):"
+  newDay <- prompt "Enter new date in format MM/DD/YY, MM/DD, or DD (leave blank for today):"
   parsedDayE <- if isJust (newDay)
-                then try $ parseTimeM True defaultTimeLocale "%-m/%-d/%-y" (fromJust newDay)
-                     :: IO (Either IOError Day)
+                then parseDate (fromJust newDay) day
                 else do today <- getToday
                         return $ Right today
   case parsedDayE of
     Left _ -> do
-      putStrLn "Invalid date format. Expected MM/DD/YY."
+      putStrLn "Invalid date format. Expected MM/DD/YY, MM/DD, or DD."
       return $ Just (timeLog,day)
     Right parsedDay -> do
       newLog <- loadTimeLog parsedDay
       return $ Just (newLog,parsedDay)
+
+parseDate :: String -> Day -> IO (Either IOError Day)
+parseDate s today
+  | (length . filter (=='/')) s == 2 = try $ parseTimeM True defaultTimeLocale "%-m/%-d/%-y" s
+                                       :: IO (Either IOError Day)
+  | (length . filter (=='/')) s == 1 = try $ parseTimeM True defaultTimeLocale "%-m/%-d/%-y"
+                                       (s ++ formatTime defaultTimeLocale "/%y" today)
+                                       :: IO (Either IOError Day)
+  | otherwise = try $ parseTimeM True defaultTimeLocale "%-d/%-m/%-y"
+                (s ++ formatTime defaultTimeLocale "/%m/%y" today)
+                :: IO (Either IOError Day)
 
 editTimeLog :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 editTimeLog day timeLog = do
