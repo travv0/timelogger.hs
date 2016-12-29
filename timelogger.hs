@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.4.0"
+version = "1.4.1"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
