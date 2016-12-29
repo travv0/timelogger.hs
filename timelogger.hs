@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.3.4"
+version = "1.4.0"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -36,6 +36,7 @@ commands = [ ('q', quit)
            , ('l', printLog)
            , ('L', printTimeTable)
            , ('e', editTimeLog)
+           , ('f', fixRecordNum)
            , ('h', printHelp)
            , ('v', printVersionInfo)
            ]
@@ -140,6 +141,7 @@ printHelp day timeLog = do
     "l: print log\n" ++
     "L: print timetable\n" ++
     "e: edit record\n" ++
+    "f: edit record number for all records with given number\n" ++
     "h: show this help\n" ++
     "v: show version information\n" ++
     "q: quit"
@@ -321,6 +323,54 @@ printEditOptions rcd = do
 
 replaceAtIndex :: Int -> a -> [a] -> [a]
 replaceAtIndex n item ls = a ++ (item:b) where (a, (_:b)) = splitAt n ls
+
+fixRecordNum :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
+fixRecordNum day timeLog
+  | length (records timeLog) == 0 = do
+      putStrLn "Can't fix record number on day with no records."
+      return $ Just (timeLog, day)
+  | otherwise = do
+      _ <- sequence $ fmap putStrLn $ zipWith (\n rcd -> show n ++ ". " ++ rcd)
+           ([1..] :: [Int]) $ getRecordNums (records timeLog)
+      ind <- prompt "Enter ID:"
+      case ind of
+        Just i -> case reads i of
+                    [(n,_)] -> do
+                      newLog <- fixRecordNumInLog n timeLog
+                      saveTimeLog day newLog
+                      return $ Just (newLog, day)
+                    _ -> do
+                      putStrLn "Invalid input."
+                      return $ Just (timeLog, day)
+        Nothing -> do
+          putStrLn "Canceled."
+          return $ Just (timeLog, day)
+
+fixRecordNumInLog :: Int -> TimeLog -> IO TimeLog
+fixRecordNumInLog n timeLog
+  | n <= length (records timeLog) && n > 0 = do
+      let oldNum = (recordNum $ (records timeLog) !! (n - 1))
+      newNum <- prompt "Enter new item number:"
+      case newNum of
+        Just num -> return $ replaceAllRecordNums timeLog oldNum num
+        Nothing -> do
+          putStrLn "Canceled."
+          return timeLog
+  | otherwise = do
+      putStrLn "Invalid ID."
+      return timeLog
+
+replaceAllRecordNums :: TimeLog -> String -> String -> TimeLog
+replaceAllRecordNums timeLog old new = TimeLog (map fixNum
+                                                (records timeLog))
+                                       (current timeLog)
+  where fixNum rcd = Record (if (recordNum rcd) == old
+                              then new
+                              else (recordNum rcd))
+                     (inTime rcd)
+                     (outTime rcd)
+                     (description rcd)
+                     (billable rcd)
 
 printTimeLogList :: TimeLog -> IO ()
 printTimeLogList timeLog = do
