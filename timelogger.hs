@@ -93,6 +93,9 @@ handleCommand day timeLog (cmd:_) = do
 quit :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 quit _ _ = return Nothing
 
+canceledMessage :: String
+canceledMessage = "Canceled."
+
 initClockInOut :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 initClockInOut day timeLog = do
   currentTime <- getLocalTime
@@ -101,7 +104,7 @@ initClockInOut day timeLog = do
 
 initDelayedClockInOut :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 initDelayedClockInOut day timeLog = do
-  inputtedTime <- prompt "How many minutes ago to clock in/out?"
+  inputtedTime <- prompt "How many minutes ago to clock in/out? (Empty cancels)"
   case inputtedTime of
     Just t -> do
       time <- handleInputtedMinutes (LocalTime day (TimeOfDay 0 0 0)) t
@@ -111,7 +114,7 @@ initDelayedClockInOut day timeLog = do
           return $ Just (newLog,day)
         Nothing -> return $ Just (timeLog,day)
     Nothing -> do
-      putStrLn "Canceled"
+      putStrLn canceledMessage
       return $ Just (timeLog,day)
 
 handleInputtedMinutes :: LocalTime -> String -> IO (Maybe LocalTime)
@@ -193,12 +196,12 @@ editTimeLog day timeLog = do
       return $ Just (timeLog,day)
     _ -> do
       printTimeLogList timeLog
-      num <- prompt "Enter ID of record to change:"
+      num <- prompt "Enter ID of record to change (Empty cancels):"
       newLog <- if isJust num
                 then do
                   editRecordInLog timeLog (reads $ fromJust num :: [(Int,String)])
                 else do
-                  putStrLn "Canceled"
+                  putStrLn canceledMessage
                   return timeLog
       saveTimeLog day newLog
       return $ Just (newLog,day)
@@ -222,11 +225,11 @@ editRecordInLog timeLog _ = do
 editRecord :: Record -> IO Record
 editRecord rcd = do
   printEditOptions rcd
-  ind <- prompt "Enter ID of desired action:"
+  ind <- prompt "Enter ID of desired action (Empty cancels):"
   if isJust ind
     then handleEditID rcd (reads $ fromJust ind :: [(Int,String)])
     else do
-      putStrLn "Canceled"
+      putStrLn canceledMessage
       return rcd
 
 handleEditID :: Record -> [(Int,String)] -> IO Record
@@ -246,17 +249,17 @@ handleEditID rcd [(ind,_)] = do
       putStrLn "Out of range"
       return rcd
 handleEditID rcd _ = do
-  putStrLn "Canceled"
+  putStrLn canceledMessage
   return rcd
 
 editRecordNum :: Record -> IO Record
 editRecordNum rcd = do
-  num <- prompt "Enter new record number:"
+  num <- prompt "Enter new record number (Empty cancels):"
   case num of
     Just n ->
       return $ Record n (inTime rcd) (outTime rcd) (description rcd) (billable rcd)
     Nothing -> do
-      putStrLn "Canceled"
+      putStrLn canceledMessage
       return rcd
 
 parseTimeInput :: LocalTime -> String -> IO (Maybe LocalTime)
@@ -298,11 +301,11 @@ editOutTime rcd = do
 
 editDescription :: Record -> IO Record
 editDescription rcd = do
-  desc <- prompt "Enter new description:"
+  desc <- prompt "Enter new description (Empty cancels):"
   if isJust desc
     then return $ Record (recordNum rcd) (inTime rcd) (outTime rcd) desc (billable rcd)
     else do
-      putStrLn "Canceled"
+      putStrLn canceledMessage
       return rcd
 
 editBillable :: Record -> IO Record
@@ -332,7 +335,7 @@ fixRecordNum day timeLog
   | otherwise = do
       _ <- sequence $ fmap putStrLn $ zipWith (\n rcd -> show n ++ ". " ++ rcd)
            ([1..] :: [Int]) $ getRecordNums (records timeLog)
-      ind <- prompt "Enter ID:"
+      ind <- prompt "Enter ID (Empty cancels):"
       case ind of
         Just i -> case reads i of
                     [(n,_)] -> do
@@ -343,18 +346,18 @@ fixRecordNum day timeLog
                       putStrLn "Invalid input."
                       return $ Just (timeLog, day)
         Nothing -> do
-          putStrLn "Canceled."
+          putStrLn canceledMessage
           return $ Just (timeLog, day)
 
 fixRecordNumInLog :: Int -> TimeLog -> IO TimeLog
 fixRecordNumInLog n timeLog
   | n <= length (records timeLog) && n > 0 = do
       let oldNum = (recordNum $ (records timeLog) !! (n - 1))
-      newNum <- prompt "Enter new item number:"
+      newNum <- prompt "Enter new item number (Empty cancels):"
       case newNum of
         Just num -> return $ replaceAllRecordNums timeLog oldNum num
         Nothing -> do
-          putStrLn "Canceled."
+          putStrLn canceledMessage
           return timeLog
   | otherwise = do
       putStrLn "Invalid ID."
@@ -417,18 +420,18 @@ clockIn timeLog time = do
   unless (null (records timeLog))
     $ putStrLn "Items worked on today:"
   _ <- sequence $ fmap putStrLn $ getRecordNums (records timeLog)
-  num <- prompt "\nEnter item ID:"
+  num <- prompt "\nEnter item ID (Empty cancels):"
   case num of
     Just n -> do
       putStrLn $ "Clocked in at " ++ formatTime defaultTimeLocale "%R" time
       return $ TimeLog (records timeLog) (Just $ Record n time Nothing Nothing Nothing)
     Nothing -> do
-      putStrLn "Canceled"
+      putStrLn canceledMessage
       return timeLog
 
 clockOut :: TimeLog -> LocalTime -> IO TimeLog
 clockOut timeLog time = do
-  desc <- prompt "Enter a description of what you worked on:"
+  desc <- prompt "Enter a description of what you worked on (Empty cancels):"
   case desc of
     Just d -> do
       bill <- promptYN "Was this work billable?"
@@ -437,7 +440,7 @@ clockOut timeLog time = do
       putStrLn $ "Clocked out at " ++ formatTime defaultTimeLocale "%R" time
       return $ TimeLog (records timeLog ++ [newRecord]) Nothing
     Nothing -> do
-      putStrLn "Canceled"
+      putStrLn canceledMessage
       return timeLog
 
 prompt :: String -> IO (Maybe String)
