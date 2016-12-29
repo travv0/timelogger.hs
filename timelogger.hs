@@ -214,13 +214,20 @@ editRecordInLog timeLog [(n,_)]
   | n <= length (records timeLog) && n > 0 = do
       let rcds = (records timeLog)
       newRcd <- editRecord (rcds !! (n - 1))
-      return $ TimeLog (replaceAtIndex (n - 1) newRcd rcds) (current timeLog)
+      return $ TimeLog (sortRecords (replaceAtIndex (n - 1) newRcd rcds)) (current timeLog)
   | otherwise = do
       putStrLn "Out of range"
       return timeLog
 editRecordInLog timeLog _ = do
   putStrLn "Invalid input"
   return timeLog
+
+sortRecords :: Records -> Records
+sortRecords rcds = sortBy sortInTime rcds
+  where sortInTime a b
+          | (inTime a) > (inTime b) = GT
+          | (inTime a) < (inTime b) = LT
+          | otherwise = EQ
 
 editRecord :: Record -> IO Record
 editRecord rcd = do
