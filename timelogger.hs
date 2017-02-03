@@ -9,7 +9,7 @@ import Control.Monad
 import Control.Exception
 
 version :: String
-version = "1.4.1"
+version = "1.4.2"
 
 data TimeLog = TimeLog { records :: Records
                        , current :: Maybe Record
@@ -445,7 +445,7 @@ clockOut timeLog time = do
       let curr = fromJust $ current timeLog
           newRecord = Record (recordNum curr) (inTime curr) (Just time) (Just d) (Just bill)
       putStrLn $ "Clocked out at " ++ formatTime defaultTimeLocale "%R" time
-      return $ TimeLog (records timeLog ++ [newRecord]) Nothing
+      return $ TimeLog (sortRecords (records timeLog ++ [newRecord])) Nothing
     Nothing -> do
       putStrLn canceledMessage
       return timeLog
@@ -494,7 +494,8 @@ printLog day timeLog = do
 printTimeTable :: Day -> TimeLog -> IO (Maybe (TimeLog,Day))
 printTimeTable day timeLog = do
   let singletonCurr = if isJust (current timeLog) then [fromJust (current timeLog)] else []
-  _ <- mapM printTimeTableRow $ (records timeLog) ++ singletonCurr
+      sortedLog = TimeLog (sortRecords (records timeLog)) (current timeLog)
+  _ <- mapM printTimeTableRow $ (records sortedLog) ++ singletonCurr
   return $ Just (timeLog,day)
 
 printTimeTableRow :: Record -> IO ()
