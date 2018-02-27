@@ -385,7 +385,7 @@ replaceAtIndex n item ls = a ++ (item : b)
 
 fixRecordNum :: Day -> TimeLog -> IO (Maybe (TimeLog, Day))
 fixRecordNum day timeLog
-  | null = do
+  | null (records timeLog) = do
     putStrLn "Can't fix record number on day with no records."
     return $ Just (timeLog, day)
   | otherwise = do
